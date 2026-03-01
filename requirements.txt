@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────
+# 河川砂防 GraphRAG MVP  requirements.txt
+# GPU 16GB 環境 (VRAM) + Python 3.11 想定
+# ──────────────────────────────────────────────
+
+# ── Web API ──────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# ── LLM / OpenAI ─────────────────────────────
+openai>=1.30.0
+httpx>=0.27.0           # Ollama ネイティブ API 呼び出し用
+
+# ── Neo4j ────────────────────────────────────
+neo4j>=5.19.0           # Python ドライバ
+
+# ── データ処理 ────────────────────────────────
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+tqdm>=4.66.0
+
+# ──────────────────────────────────────────────
+# LoRA 学習環境（GPT-OSS 8B + QLoRA / GPU 16GB）
+# ※ 学習時のみ必要。推論・RAG API のみなら不要
+# ──────────────────────────────────────────────
+# torch>=2.3.0           # pip install torch --index-url https://download.pytorch.org/whl/cu121
+# transformers>=4.41.0
+# peft>=0.11.0           # LoRA / QLoRA
+# bitsandbytes>=0.43.0   # 4bit/8bit 量子化
+# accelerate>=0.30.0
+# datasets>=2.19.0
+# trl>=0.8.6             # SFTTrainer
+# sentencepiece>=0.2.0
+# protobuf>=4.25.0
+
+# ──────────────────────────────────────────────
+# 評価・可視化（オプション）
+# ──────────────────────────────────────────────
+# pandas>=2.2.0
+# matplotlib>=3.9.0
+# seaborn>=0.13.0
+# jupyter>=1.0.0

@@ -1,0 +1,8 @@
+id:ID,name,:LABEL
+STD_CHOSA,河川砂防技術基準 調査編,Standard
+STD_KEIKAKU_KIHON,河川砂防技術基準 計画編（基本計画編）,Standard
+STD_KEIKAKU_SHISETSU,河川砂防技術基準 計画編（施設配置等計画編）,Standard
+STD_SEKKEI,河川砂防技術基準 設計編,Standard
+STD_IJIKANRI_KASEN,河川砂防技術基準 維持管理編（河川編）,Standard
+STD_IJIKANRI_DAM,河川砂防技術基準 維持管理編（ダム編）,Standard
+STD_IJIKANRI_SABO,河川砂防技術基準 維持管理編（砂防編）,Standard

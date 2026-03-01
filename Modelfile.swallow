@@ -1,0 +1,11 @@
+FROM hf.co/mmnga-o/GPT-OSS-Swallow-20B-RL-v0.1-gguf:Q4_K_M
+
+# GPT-OSS Swallow 20B RL v0.1 用カスタムテンプレート
+# 特殊チャンネル形式: <|start|>role<|channel|>ch<|message|>content<|end|>
+# final チャンネルに直接ジャンプして thinking をスキップ（GraphRAG 高速化）
+TEMPLATE """{{ if .System }}<|start|>system<|message|>{{ .System }}<|end|>
+{{ end }}<|start|>user<|message|>{{ .Prompt }}<|end|>
+<|start|>assistant<|channel|>final<|message|>"""
+
+PARAMETER stop "<|end|>"
+PARAMETER stop "<|start|>"

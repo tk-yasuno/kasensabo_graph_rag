@@ -1,0 +1,45 @@
+# Environment
+.env
+.env.example
+*.env
+
+# Backups
+0_LogBAK/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Evaluation results (large JSONL files)
+data/eval/results/**/*.jsonl
+data/eval/results/*.jsonl
+
+# Temporary scripts
+scripts/_check_db.py
+
+# Logs
+*.log
+eval_*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
