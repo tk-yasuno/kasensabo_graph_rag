@@ -384,7 +384,64 @@ Category: "Maintenance — River" (14 Q: levee×5, revetment×3, groin, bed stab
 
 ---
 
+### v0.4 — 100-Question Full Benchmark (2026-03-02 / `results_20260301_210818.jsonl`)
+
+All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Hazard / Cross-domain
+
+#### Score Distribution
+
+| Score | Case A | Case C |
+|---|---|---|
+| 3 | **60** (60%) | **77** (77%) |
+| 2 | 12 (12%) | 10 (10%) |
+| 1 | 25 (25%) | 11 (11%) |
+| 0 | 3 (3%) | 2 (2%) |
+| **Avg** | **2.29 / 3** | **2.62 / 3** |
+
+**C-A = +0.33** &nbsp;|&nbsp; C > A: 36 Q &nbsp;|&nbsp; A > C: 17 Q &nbsp;|&nbsp; Tie: 47 Q
+
+#### By Category
+
+| Category | N | A avg | C avg | C-A |
+|---|---|---|---|---|
+| Survey | 7 | 2.14 | 2.57 | +0.43 |
+| Planning | 8 | 2.75 | 2.62 | **-0.12** |
+| Design | 15 | 2.13 | 2.60 | +0.47 |
+| Maintenance — River | 20 | 2.05 | 2.55 | +0.50 |
+| Maintenance — Dam | 15 | 2.47 | 2.73 | +0.27 |
+| Maintenance — Sabo | 15 | 2.33 | 2.53 | +0.20 |
+| Hazard | 10 | 2.40 | 2.60 | +0.20 |
+| Cross-domain | 10 | 2.30 | 2.80 | **+0.50** |
+
+#### graph_hits Statistics
+
+| Metric | Value |
+|---|---|
+| Average | 33.8 |
+| Min | 22 |
+| Max | 63 |
+| Below threshold (<25, adaptive retry fired) | 8 Q |
+
+#### Key Findings (v0.4)
+
+| Category | Insight |
+|---|---|
+| Planning (-0.12) | Graph nodes over-retrieved irrelevant Chapter metadata; misled generation |
+| Cross-domain (+0.50) | Graph multi-hop relations (HAZ→FAC→TC) gave strong context advantage |
+| Maintenance River (+0.50) | Structure-specific graph context most beneficial for detailed inspection Q |
+| C score 0–1 repeat cases (10 Q) | Graph context caused hallucinated duplication or contradicted base LLM knowledge |
+
+---
+
 ## Changelog
+
+### v0.4 — 2026-03-02
+
+- **100-question full evaluation** across 8 categories (`results_20260301_210818.jsonl`)
+- **A avg 2.29 / C avg 2.62** (+0.33 GraphRAG effect confirmed at scale)
+- C wins 36 Q (36%), A wins 17 Q (17%), tie 47 Q (47%)
+- `graph_hits` avg 33.8; adaptive retry fired for 8 Q (all recovered to ≥25)
+- Identified weakness: "Planning" category C < A — over-retrieval of Chapter metadata suspected
 
 ### v0.3 — 2026-03-01
 
