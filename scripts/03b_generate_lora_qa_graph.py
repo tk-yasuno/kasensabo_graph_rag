@@ -154,7 +154,7 @@ def call_ollama(context: str, model: str, n: int) -> list[dict]:
             "temperature":    0.7,
             "repeat_penalty": 1.2,
             "num_ctx":        4096,
-            "num_predict":    1024,
+            "num_predict":    -1,   # 無制限 — JSON 切れ防止
             "stop":           ["<|end|>", "<|start|>"],
         },
     }
@@ -218,6 +218,7 @@ def main():
     parser.add_argument("--delay",       type=float, default=INTER_DELAY)
     parser.add_argument("--dry_run",     action="store_true", help="文脈確認のみ、LLM 呼び出しなし")
     parser.add_argument("--out",         default=str(OUT_DIR / "train_graph_rels.jsonl"))
+    parser.add_argument("--start",       type=int, default=1, help="開始リレーション番号 (1始まり)")
     args = parser.parse_args()
 
     print("=== LoRA 学習用 QA 生成 (グラフリレーション駆動) ===")
@@ -247,11 +248,18 @@ def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = Path(args.out)
 
+    # --start で途中から再開: 既存 JSONL を読み込んで引き継ぐ
     dataset: list[dict] = []
-    skipped_sim  = 0
+    if args.start > 1 and Path(args.out).exists():
+        with open(args.out, encoding="utf-8") as f:
+            dataset = [json.loads(l) for l in f if l.strip()]
+        print(f"  再開: 既存 {len(dataset)} 問を引き継ぎ")
+    skipped_sim   = 0
     skipped_empty = 0
 
     for i, (sid, eid, rtype) in enumerate(rels, 1):
+        if i < args.start:
+            continue
         src = nodes.get(sid, {"name": sid, "label": "", "description": ""})
         tgt = nodes.get(eid, {"name": eid, "label": "", "description": ""})
         context = build_context(src, tgt, rtype)
@@ -276,6 +284,13 @@ def main():
 
         print(f"    採用 {accepted}/{len(qa_list)} 問（累計 {len(dataset)} 問）")
         time.sleep(args.delay)
+
+        # 10リレーションごとにチェックポイント保存
+        if i % 10 == 0:
+            with open(out_path, "w", encoding="utf-8") as f:
+                for rec in dataset:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            print(f"  [checkpoint] {i}/268 完了 → {len(dataset)} 問保存")
 
     # ──────────────────────────────────────────
     # 保存
