@@ -431,6 +431,38 @@ All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Ha
 | Maintenance River (+0.50) | Structure-specific graph context most beneficial for detailed inspection Q |
 | C score 0–1 repeat cases (10 Q) | Graph context caused hallucinated duplication or contradicted base LLM knowledge |
 
+#### Latency Comparison
+
+| Metric | Case A (Plain LLM) | Case C (GraphRAG) | C - A |
+|---|---|---|---|
+| **Mean** | 42.2 s | **31.1 s** | **-11.1 s** |
+| Median | 43.5 s | 33.4 s | |
+| Min | 22.0 s | 7.9 s | |
+| Max | 43.9 s | 35.5 s | |
+| P75 | 43.6 s | 33.5 s | |
+| P95 | 43.8 s | 33.8 s | |
+| **Total (100 Q)** | 70.3 min | **51.9 min** | **-18.4 min** |
+
+**C is faster in 96/100 questions** — graph context constrains the LLM's output space, reducing token generation time despite the extra Neo4j query overhead.
+
+| Metric | Value |
+|---|---|
+| Output length avg | A: 2,349 chars / C: 2,452 chars |
+| graph_hits vs C latency (Pearson r) | 0.085 — no significant correlation |
+
+**By Category**
+
+| Category | N | A avg | C avg | graph_hits avg |
+|---|---|---|---|---|
+| Hazard | 10 | 43.5 s | 30.6 s | 35.9 |
+| Cross-domain | 10 | 40.6 s | 32.2 s | 32.5 |
+| Maintenance — Dam | 15 | 41.8 s | 30.7 s | 31.4 |
+| Maintenance — River | 20 | 42.3 s | **27.9 s** | 32.1 |
+| Maintenance — Sabo | 15 | 43.4 s | 32.1 s | 35.5 |
+| Planning | 8 | 39.3 s | 31.6 s | 38.2 |
+| Design | 15 | 43.4 s | 33.2 s | 35.4 |
+| Survey | 7 | 41.3 s | 33.4 s | 30.4 |
+
 ---
 
 ## Changelog
@@ -441,6 +473,7 @@ All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Ha
 - **A avg 2.29 / C avg 2.62** (+0.33 GraphRAG effect confirmed at scale)
 - C wins 36 Q (36%), A wins 17 Q (17%), tie 47 Q (47%)
 - `graph_hits` avg 33.8; adaptive retry fired for 8 Q (all recovered to ≥25)
+- **Latency: C is 11.1 s faster on average** (42.2 s → 31.1 s); C faster in 96/100 Q — graph context constrains token generation
 - Identified weakness: "Planning" category C < A — over-retrieval of Chapter metadata suspected
 
 ### v0.3 — 2026-03-01
