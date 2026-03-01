@@ -168,11 +168,19 @@ def call_ollama(context: str, model: str, n: int) -> list[dict]:
             resp.raise_for_status()
             content = resp.json().get("response", "").strip()
 
-            # JSON 配列を抽出（```json ... ``` ブロックも対応）
-            m = re.search(r"\[.*?\]", content, re.DOTALL)
-            if not m:
-                raise ValueError(f"JSON 配列なし: {content[:120]}")
-            return json.loads(m.group())
+            # JSON 配列を抽出（グリーディ、先頭改行を許容、単一オブジェクトも対応）
+            m = re.search(r"\[.+\]", content, re.DOTALL)
+            if m:
+                parsed = json.loads(m.group())
+                if isinstance(parsed, list):
+                    return parsed
+            # 単一オブジェクト形式へのフォールバック
+            m2 = re.search(r"\{.+\}", content, re.DOTALL)
+            if m2:
+                obj = json.loads(m2.group())
+                if isinstance(obj, dict) and "question" in obj:
+                    return [obj]
+            raise ValueError(f"JSON 配列なし: {content[:120]}")
         except (json.JSONDecodeError, ValueError) as e:
             print(f"    [WARN] JSON パースエラー (attempt {attempt+1}): {e}")
             time.sleep(2)
