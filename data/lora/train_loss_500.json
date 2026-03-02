@@ -1,0 +1,84 @@
+{
+  "subset": 500,
+  "model": "tokyotech-llm/Llama-3-Swallow-8B-Instruct-v0.1",
+  "epochs": 3,
+  "elapsed_min": 20.0,
+  "history": [
+    {
+      "step": 12,
+      "epoch": 0.192,
+      "loss": 1.6236
+    },
+    {
+      "step": 24,
+      "epoch": 0.384,
+      "loss": 0.9677
+    },
+    {
+      "step": 36,
+      "epoch": 0.576,
+      "loss": 0.9249
+    },
+    {
+      "step": 48,
+      "epoch": 0.768,
+      "loss": 0.8743
+    },
+    {
+      "step": 60,
+      "epoch": 0.96,
+      "loss": 0.8764
+    },
+    {
+      "step": 72,
+      "epoch": 1.144,
+      "loss": 0.7866
+    },
+    {
+      "step": 84,
+      "epoch": 1.336,
+      "loss": 0.7601
+    },
+    {
+      "step": 96,
+      "epoch": 1.528,
+      "loss": 0.7139
+    },
+    {
+      "step": 108,
+      "epoch": 1.72,
+      "loss": 0.6972
+    },
+    {
+      "step": 120,
+      "epoch": 1.912,
+      "loss": 0.7425
+    },
+    {
+      "step": 132,
+      "epoch": 2.096,
+      "loss": 0.6615
+    },
+    {
+      "step": 144,
+      "epoch": 2.288,
+      "loss": 0.5701
+    },
+    {
+      "step": 156,
+      "epoch": 2.48,
+      "loss": 0.5882
+    },
+    {
+      "step": 168,
+      "epoch": 2.672,
+      "loss": 0.5724
+    },
+    {
+      "step": 180,
+      "epoch": 2.864,
+      "loss": 0.6045
+    }
+  ],
+  "final_loss": 0.6045
+}

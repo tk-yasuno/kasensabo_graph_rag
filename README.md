@@ -512,7 +512,7 @@ All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Ha
 | `lr_scheduler_type` | `cosine` | |
 | `warmup_ratio` | 0.05 | |
 | `weight_decay` | 0.01 | |
-| `packing` | `True` | 短サンプルを連結し GPU 効率化 |
+| `packing` | `False` | Windows + triton 3.2 環境での JIT ハング回避 |
 | `bf16` | `True` (RTX 4060 Ti は対応) | |
 
 ### Prompt Format (Llama-3 Instruct)
@@ -573,12 +573,15 @@ ollama create swallow8b-lora-n715 -f Modelfile
 
 ### Convergence Check Plan
 
-| Subset | Questions | Expected final loss | Status |
-|---|---|---|---|
-| 100 | 100 | ~1.0–1.5 | ⏳ 実行中 |
-| 250 | 250 | ~0.8–1.2 | ⏳ 待機 |
-| 500 | 500 | ~0.6–1.0 | ⏳ 待機 |
-| 715 | 715 | ~0.5–0.9 | ⏳ 待機 |
+| Subset | Questions | Final Loss | Training Time | Status |
+|---|---|---|---|---|
+| 100 | 100 | **0.7958** | 4.4 min | ✅ 完了 |
+| 250 | 250 | **0.6859** | 10.2 min | ✅ 完了 |
+| 500 | 500 | **0.6045** | 20.0 min | ✅ 完了 |
+| 715 | 715 | **0.5565** | 28.5 min | ✅ 完了 |
+
+Loss monotonically decreases with dataset size → **stable convergence confirmed**.  
+Adapter saved to `models/lora/swallow8b_n{N}/` (safetensors format).
 
 ---
 
@@ -591,6 +594,16 @@ ollama create swallow8b-lora-n715 -f Modelfile
   - `scripts/04a_make_subsets.py`: rel_type 層別サンプリングで 4段階サブセット生成
   - `scripts/05_train_lora_unsloth.py`: Swallow-8B-Instruct QLoRA 学習スクリプト
 - **unsloth 環境セットアップ確立** (torch 2.6.0+cu124 / triton-windows 3.2.0.post21)
+  - 既知の問題: `packing=True` が triton JIT でハング → `packing=False` + `TORCHDYNAMO_DISABLE=1` で解消
+- **4段階 QLoRA 学習完了・安定収束確認**
+
+  | Subset | Loss | Time |
+  |---|---|---|
+  | 100 Q | 0.7958 | 4.4 min |
+  | 250 Q | 0.6859 | 10.2 min |
+  | 500 Q | 0.6045 | 20.0 min |
+  | 715 Q | **0.5565** | 28.5 min |
+
 - `generate_lora_train_Lesson.md`: データ生成エラー分析と改善策
 
 ### v0.4 — 2026-03-02

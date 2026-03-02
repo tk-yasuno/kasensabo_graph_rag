@@ -25,8 +25,13 @@ Usage:
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
+
+# triton JIT ハング対策: torch.compile を無効化
+os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
 
 # ── 必要なライブラリ確認 ──
 try:
@@ -186,7 +191,7 @@ def train_one(size: int, export_gguf: bool = False) -> None:
         report_to                   = "none",
         dataset_text_field          = "text",
         max_seq_length              = MAX_SEQ_LEN,
-        packing                     = True,   # 短いサンプルを連結して GPU 効率化
+        packing                     = False,  # triton JIT ハング回避のため無効化
     )
 
     # ── ロスコールバック ──
