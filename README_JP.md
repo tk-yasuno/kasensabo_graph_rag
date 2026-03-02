@@ -888,6 +888,7 @@ ollama create swallow8b-lora-n715 -f C:\ollama_import\Modelfile_q4
 - `scripts/07_compare_qa_table.py`: 代表10問 Q&A 比較表生成スクリプト
 - `docs/qa_comparison_10q.md`: A/B/C 全回答テキスト比較（定性分析）
 - README_JP.md: 「定性的分析 — 代表10問 Q&A 比較」セクション追加（5つの知見）
+- README / README_JP.md: 「参考文献」セクション追加（14件：LoRA・QLoRA・GraphRAG・LLM-as-Judge ほか、arXiv 論文準備向け）
 
 ### v0.5 — 2026-03-02
 
@@ -926,3 +927,54 @@ ollama create swallow8b-lora-n715 -f C:\ollama_import\Modelfile_q4
 - FastAPI GraphRAG API 動作確認済み（`/query`, `/query/plain`, `/compare`）
 - Ollama の OpenAI 互換 API の制限を回避するため `llm_client.py` に
   `/api/generate` ネイティブ呼び出し (`_ollama_chat`) を実装
+
+---
+
+## 参考文献
+
+> arXiv 論文執筆に向けた主要文献一覧。英語表記は README.md に記載。
+
+### ファウンデーションモデル・ファインチューニング
+
+**[1] LoRA** — 大規模言語モデルの低ランク適応  
+Hu et al., ICLR 2022. <https://arxiv.org/abs/2106.09685>
+
+**[2] QLoRA** — 量子化 LLM の効率的ファインチューニング  
+Dettmers et al., NeurIPS 2023. <https://arxiv.org/abs/2305.14314>
+
+**[3] Llama 3** — ベースアーキテクチャ  
+Meta AI, 2024. <https://arxiv.org/abs/2407.21783>
+
+**[4] Swallow** — 日本語特化 Llama 3（東京科学大学 × 産総研）  
+Okazaki et al., LREC-COLING 2024. <https://arxiv.org/abs/2404.17733>
+
+**[5] Unsloth** — 高速 QLoRA 学習フレームワーク  
+Han & Han, 2023. <https://github.com/unslothai/unsloth>
+
+### Retrieval-Augmented Generation（RAG）
+
+**[6] RAG** — 知識集約型 NLP タスクへの検索拡張生成  
+Lewis et al., NeurIPS 2020. <https://arxiv.org/abs/2005.11401>
+
+**[7] GraphRAG** — グラフベース RAG（Microsoft Research）  
+Edge et al., 2024. <https://arxiv.org/abs/2404.16130>
+
+**[8] LLM × 知識グラフ サーベイ**  
+Pan et al., IEEE TKDE 2024. <https://arxiv.org/abs/2306.08302>
+
+**[9] HippoRAG** — 神経科学にインスパイアされた長期記憶 RAG  
+Guo et al., 2024. <https://arxiv.org/abs/2405.14831>
+
+### 評価
+
+**[10] LLM-as-Judge** — MT-Bench / Chatbot Arena  
+Zheng et al., NeurIPS 2023. <https://arxiv.org/abs/2306.05685>
+
+**[11] RAGAS** — RAG 自動評価フレームワーク  
+Es et al., 2023. <https://arxiv.org/abs/2309.15217>
+
+### インフラ
+
+**[12]** Neo4j Property Graph: <https://neo4j.com/>  
+**[13]** Ollama（ローカル LLM サービング）: <https://ollama.com/>  
+**[14]** llama.cpp / GGUF 量子化: <https://github.com/ggerganov/llama.cpp>

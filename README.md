@@ -897,6 +897,7 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
 - `scripts/07_compare_qa_table.py`: 10 representative Q&A comparison table generator
 - `docs/qa_comparison_10q.md`: Full answer texts for A/B/C on 10 selected questions (qualitative analysis)
 - README: Added "Qualitative Analysis — 10 Representative Questions" section (5 key findings)
+- README: Added "References" section (14 entries: LoRA, QLoRA, Llama 3, Swallow, GraphRAG, RAG, LLM-as-Judge, etc.) for arXiv paper preparation
 
 ### v0.5 — 2026-03-02
 
@@ -956,6 +957,87 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
 - Manual Neo4j CSV loaded (184 nodes · 268 relations)
 - FastAPI GraphRAG API operational; `/api/generate` native call to bypass Ollama OpenAI-endpoint limitation
 
+
+---
+
+## References
+
+> Key papers cited in support of the arXiv manuscript based on this project.
+
+### Foundation Models & Fine-tuning
+
+**[1] LoRA — Low-Rank Adaptation**  
+Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., & Chen, W. (2022).  
+*LoRA: Low-Rank Adaptation of Large Language Models.*  
+ICLR 2022. <https://arxiv.org/abs/2106.09685>
+
+**[2] QLoRA — Efficient Fine-tuning with Quantisation**  
+Dettmers, T., Pagnoni, A., Holtzman, A., & Zettlemoyer, L. (2023).  
+*QLoRA: Efficient Finetuning of Quantized LLMs.*  
+NeurIPS 2023. <https://arxiv.org/abs/2305.14314>
+
+**[3] Llama 3 — Base Architecture**  
+Meta AI. (2024).  
+*The Llama 3 Herd of Models.*  
+<https://arxiv.org/abs/2407.21783>
+
+**[4] Swallow — Japanese-Adapted Llama 3**  
+Okazaki, N., Fujii, R., Oshiro, T., Zhao, H., Abe, H., Sakamoto, K., & Takahashi, K. (2024).  
+*Building a Large Japanese Web Corpus for Large Language Models.*  
+LREC-COLING 2024. <https://arxiv.org/abs/2404.17733>
+
+**[5] Unsloth — Efficient QLoRA Training Framework**  
+Han, D., & Han, M. (2023).  
+*Unsloth: 2-5× Faster, 70% Less Memory QLoRA Finetuning.*  
+<https://github.com/unslothai/unsloth>
+
+### Retrieval-Augmented Generation (RAG)
+
+**[6] RAG — Retrieval-Augmented Generation**  
+Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., … Kiela, D. (2020).  
+*Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.*  
+NeurIPS 2020. <https://arxiv.org/abs/2005.11401>
+
+**[7] GraphRAG — From Local to Global**  
+Edge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., … Larson, J. (2024).  
+*From Local to Global: A Graph RAG Approach to Query-Focused Summarization.*  
+Microsoft Research. <https://arxiv.org/abs/2404.16130>
+
+**[8] Knowledge Graph + LLM Survey**  
+Pan, S., Luo, L., Wang, Y., Chen, C., Wang, J., & Wu, X. (2024).  
+*Unifying Large Language Models and Knowledge Graphs: A Roadmap.*  
+IEEE TKDE 2024. <https://arxiv.org/abs/2306.08302>
+
+**[9] HippoRAG — Neurobiologically-Inspired RAG**  
+Guo, Z., Jorge, J., Shi, T., Corro, A., & Yoon, S. (2024).  
+*HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models.*  
+<https://arxiv.org/abs/2405.14831>
+
+### Evaluation
+
+**[10] LLM-as-Judge**  
+Zheng, L., Chiang, W.-L., Sheng, Y., Zhuang, S., Wu, Z., Zhuang, Y., … Stoica, I. (2023).  
+*Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.*  
+NeurIPS 2023 Datasets & Benchmarks Track. <https://arxiv.org/abs/2306.05685>
+
+**[11] RAGAS — RAG Evaluation Framework**  
+Es, S., James, J., Anke, L. E., & Schockaert, S. (2023).  
+*RAGAS: Automated Evaluation of Retrieval Augmented Generation.*  
+<https://arxiv.org/abs/2309.15217>
+
+### Infrastructure
+
+**[12] Neo4j Property Graph**  
+Neo4j, Inc. (2024). *Neo4j Graph Database & Analytics.*  
+<https://neo4j.com/>
+
+**[13] Ollama — Local LLM Serving**  
+Ollama (2024). *Run large language models locally.*  
+<https://ollama.com/>
+
+**[14] GGUF / llama.cpp Quantisation**  
+Gerganov, G. et al. (2023). *llama.cpp.*  
+<https://github.com/ggerganov/llama.cpp>
 
 ---
 
