@@ -4,14 +4,19 @@ scripts/04_evaluate.py  ―  GraphRAG vs プレーン LLM 評価スクリプト
 概要:
     test_questions_100.json の各質問を Case A（プレーン LLM）と
     Case C（GraphRAG）の両方に投げ、LLM-as-Judge で自動採点する。
+    --case-b フラグを指定すると Case B（LoRA FT モデル）の単独評価を実行する。
 
 出力:
-    data/eval/results/results_<timestamp>.jsonl   各問の詳細結果
-    data/eval/results/summary_<timestamp>.md      集計レポート
+    data/eval/results/results_<timestamp>.jsonl     各問の詳細結果
+    data/eval/results/results_b_<timestamp>.jsonl   Case B 評価結果
+    data/eval/results/summary_<timestamp>.md        集計レポート
 
 使い方:
     # 全100問（LLM-as-Judge あり）
     python scripts/04_evaluate.py
+
+    # Case B（LoRA FT モデル）単独評価
+    python scripts/04_evaluate.py --case-b
 
     # 指定範囲のみ
     python scripts/04_evaluate.py --start 1 --end 10
@@ -210,8 +215,8 @@ def _ollama_judge(question: str, answer: str) -> dict:
 
 
 # ─── メイン評価ロジック ──────────────────────────────────
-def evaluate_question(q: dict, use_judge: bool) -> dict:
-    """1問を評価し、結果辞書を返す。"""
+def evaluate_question(q: dict, use_judge: bool, case_b: bool = False) -> dict:
+    """1問を評価し、結果辞書を返す。case_b=True のとき Case B 単独評価（plain のみ）。"""
     qid      = q["id"]
     question = q["question"]
     category = q.get("category", "")
@@ -219,6 +224,33 @@ def evaluate_question(q: dict, use_judge: bool) -> dict:
 
     print(f"  [Q{qid:03d}] {category}/{subcat}")
     print(f"         {question[:60]}...")
+
+    if case_b:
+        # Case B: LoRA FT モデル（plain エンドポイント）
+        t0 = time.perf_counter()
+        res_b = _call_api("POST", f"{API_BASE}/query/plain",
+                          json={"question": question})
+        time_b = time.perf_counter() - t0
+        answer_b = res_b.get("answer", "")
+        print(f"         Case B: {len(answer_b)}字  B:{time_b:.1f}s")
+
+        judge_b: dict = {}
+        if use_judge:
+            judge_b = _ollama_judge(question, answer_b)
+            print(f"         Judge  B:{judge_b.get('score', -1)}点")
+
+        return {
+            "id":           qid,
+            "category":     category,
+            "subcategory":  subcat,
+            "question":     question,
+            "case_b": {
+                "answer":    answer_b,
+                "length":    len(answer_b),
+                "elapsed_s": round(time_b, 2),
+                "judge":     judge_b,
+            },
+        }
 
     # Case A: プレーン LLM
     t0 = time.perf_counter()
@@ -286,6 +318,90 @@ def run_judge_only(results_path: Path) -> None:
     print(f"Judge 結果を上書き保存: {results_path}")
     generate_summary(updated, results_path.with_suffix(".md"))
 
+def generate_summary_b(records: list[dict], out_path: Path) -> None:
+    """Case B 評価結果の集計レポートを Markdown で生成する。"""
+    total = len(records)
+    if total == 0:
+        return
+
+    has_judge = any(r["case_b"].get("judge") for r in records)
+    avg_len_b  = sum(r["case_b"]["length"] for r in records) / total
+    avg_time_b = sum(r["case_b"]["elapsed_s"] for r in records) / total
+
+    scores_b: list[int] = []
+    if has_judge:
+        for r in records:
+            sb = r["case_b"]["judge"].get("score", -1)
+            if sb >= 0:
+                scores_b.append(sb)
+
+    def score_dist(scores: list[int]) -> str:
+        if not scores:
+            return "N/A"
+        dist = {0: 0, 1: 0, 2: 0, 3: 0}
+        for s in scores:
+            dist[s] = dist.get(s, 0) + 1
+        return "  ".join(f"{k}点:{v}問" for k, v in dist.items())
+
+    from collections import defaultdict
+    cat_stats: dict[str, dict] = defaultdict(lambda: {"total": 0, "sum_b": 0, "n_judge": 0})
+    for r in records:
+        cat = r["category"]
+        cat_stats[cat]["total"] += 1
+        if has_judge:
+            sb = r["case_b"]["judge"].get("score", -1)
+            if sb >= 0:
+                cat_stats[cat]["sum_b"] += sb
+                cat_stats[cat]["n_judge"] += 1
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    avg_sb = sum(scores_b) / len(scores_b) if scores_b else 0
+    lines = [
+        f"# Case B — LoRA FT モデル評価レポート",
+        f"",
+        f"生成日時: {ts} / 評価問数: {total}問",
+        f"LLM: `{OLLAMA_MODEL}` (LoRA Fine-tuned on 715Q graph-derived QA)",
+        f"",
+        f"---",
+        f"",
+        f"## 全体サマリー",
+        f"",
+        f"| 指標 | Case B（LoRA FT）|",
+        f"|---|---|",
+        f"| 平均回答文字数 | {avg_len_b:.0f} 字 |",
+        f"| 平均応答時間 | {avg_time_b:.1f} 秒 |",
+    ]
+    if scores_b:
+        lines.append(f"| Judge 平均スコア（/3） | **{avg_sb:.2f}** |")
+
+    lines += ["", "---", "", "## スコア分布（LLM-as-Judge）", ""]
+    if has_judge:
+        lines.append(f"- **Case B**: {score_dist(scores_b)}  (有効 {len(scores_b)}/{total}問)")
+    else:
+        lines.append("Judge なし（`--no-judge` で実行）")
+
+    lines += ["", "---", "", "## カテゴリ別平均スコア", ""]
+    if has_judge:
+        lines += ["| カテゴリ | 問数 | Case B avg |", "|---|---|---|"]
+        for cat, st in sorted(cat_stats.items()):
+            n = st["n_judge"]
+            if n > 0:
+                avg_b_cat = st["sum_b"] / n
+                lines.append(f"| {cat} | {st['total']}問 | {avg_b_cat:.2f} |")
+
+    lines += ["", "---", "", "## 問別詳細", "",
+               "| # | カテゴリ | 質問（先頭40字）| B長 | B秒 | B点 | 採点理由 |",
+               "|---|---|---|---|---|---|---|"]
+    for r in records:
+        q_short = r["question"][:40].replace("|", "｜")
+        lb = r["case_b"]["length"]
+        tb = r["case_b"]["elapsed_s"]
+        sb_str = str(r["case_b"]["judge"].get("score", "—")) if r["case_b"].get("judge") else "—"
+        reason = r["case_b"]["judge"].get("reason", "")[:30] if r["case_b"].get("judge") else ""
+        lines.append(f"| {r['id']} | {r['category']} | {q_short} | {lb} | {tb:.1f} | {sb_str} | {reason} |")
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n📊 Case B レポート保存: {out_path}")
 
 def generate_summary(records: list[dict], out_path: Path) -> None:
     """評価結果の集計レポートを Markdown で生成する。"""
@@ -415,6 +531,8 @@ def main() -> None:
     parser.add_argument("--end",   type=int, default=100,  help="終了問番号（含む）")
     parser.add_argument("--no-judge", action="store_true", help="LLM-as-Judge をスキップ")
     parser.add_argument("--judge-only", type=str, default="", help="既存 JSONL に judge のみ適用")
+    parser.add_argument("--case-b", action="store_true",
+                        help="Case B（LoRA FT モデル）の単独評価を実行（plain エンドポイントのみ）")
     parser.add_argument("--questions", type=str, default=str(QUESTIONS_FILE), help="質問 JSON ファイル")
     parser.add_argument("--output",    type=str, default="",  help="出力 JSONL ファイル（省略時は自動命名）")
     parser.add_argument("--sleep", type=float, default=1.0, help="問間のスリープ秒（デフォルト 1.0）")
@@ -438,13 +556,21 @@ def main() -> None:
     total = len(questions)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_jsonl  = Path(args.output) if args.output else RESULTS_DIR / f"results_{ts}.jsonl"
-    out_md     = out_jsonl.with_suffix(".md")
+    is_case_b = getattr(args, "case_b", False)
+    if is_case_b:
+        out_jsonl = Path(args.output) if args.output else RESULTS_DIR / f"results_b_{ts}.jsonl"
+    else:
+        out_jsonl = Path(args.output) if args.output else RESULTS_DIR / f"results_{ts}.jsonl"
+    out_md = out_jsonl.with_suffix(".md")
 
     use_judge = not args.no_judge
 
     print(f"{'=' * 60}")
-    print(f"GraphRAG 評価 [{args.start}〜{args.end}問 / 計{total}問]")
+    if is_case_b:
+        print(f"Case B — LoRA FT 評価 [{args.start}〜{args.end}問 / 計{total}問]")
+        print(f"LLM: {OLLAMA_MODEL}")
+    else:
+        print(f"GraphRAG 評価 [{args.start}〜{args.end}問 / 計{total}問]")
     print(f"Judge: {'あり' if use_judge else 'なし'}")
     print(f"出力:  {out_jsonl}")
     print(f"{'=' * 60}")
@@ -455,7 +581,7 @@ def main() -> None:
     try:
         for i, q in enumerate(questions, 1):
             print(f"\n──── {i}/{total} ────")
-            result = evaluate_question(q, use_judge)
+            result = evaluate_question(q, use_judge, case_b=is_case_b)
             records.append(result)
             fh.write(json.dumps(result, ensure_ascii=False) + "\n")
             fh.flush()
@@ -470,10 +596,23 @@ def main() -> None:
     print(f"   結果: {out_jsonl}")
 
     # サマリーレポート生成
-    generate_summary(records, out_md)
+    if is_case_b:
+        generate_summary_b(records, out_md)
+    else:
+        generate_summary(records, out_md)
 
     # ターミナル簡易サマリー
-    if records:
+    if records and is_case_b:
+        has_judge = any(r["case_b"].get("judge") for r in records)
+        avg_len_b = sum(r["case_b"]["length"] for r in records) / len(records)
+        print(f"\n--- 簡易サマリー (Case B) ---")
+        print(f"平均文字数  B: {avg_len_b:.0f}字")
+        if has_judge:
+            sb_list = [r["case_b"]["judge"].get("score", -1) for r in records if r["case_b"].get("judge")]
+            sb_valid = [s for s in sb_list if s >= 0]
+            if sb_valid:
+                print(f"Judge 平均  B: {sum(sb_valid)/len(sb_valid):.2f}/3")
+    elif records:
         has_judge = any(r["case_a"].get("judge") for r in records)
         avg_len_a = sum(r["case_a"]["length"] for r in records) / len(records)
         avg_len_c = sum(r["case_c"]["length"] for r in records) / len(records)
