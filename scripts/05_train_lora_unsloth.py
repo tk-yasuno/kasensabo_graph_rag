@@ -247,30 +247,57 @@ def train_one(size: int, export_gguf: bool = False) -> None:
 
     # ── GGUF エクスポート（オプション） ──
     if export_gguf:
-        gguf_out = GGUF_DIR / f"swallow8b_lora_n{size}"
-        gguf_out.mkdir(parents=True, exist_ok=True)
-        print(f"\n  GGUF エクスポート中 → {gguf_out}")
-        # unsloth は save_pretrained_gguf で直接 GGUF 出力可能
-        model.save_pretrained_gguf(
-            str(gguf_out),
-            tokenizer,
-            quantization_method = "q4_k_m",  # Ollama 標準量子化
+        export_gguf_from_model(model, tokenizer, size)
+
+
+def export_gguf_from_model(model, tokenizer, size: int) -> None:
+    """モデル・トークナイザーオブジェクトから GGUF を生成し Modelfile を作成する。"""
+    gguf_out = GGUF_DIR / f"swallow8b_lora_n{size}"
+    gguf_out.mkdir(parents=True, exist_ok=True)
+    print(f"\n  GGUF エクスポート中 → {gguf_out}")
+    # unsloth は save_pretrained_gguf で直接 GGUF 出力可能
+    model.save_pretrained_gguf(
+        str(gguf_out),
+        tokenizer,
+        quantization_method = "q4_k_m",  # Ollama 標準量子化
+    )
+    # Ollama 用 Modelfile 生成
+    modelfile_path = gguf_out / "Modelfile"
+    gguf_files = list(gguf_out.glob("*.gguf"))
+    gguf_name  = gguf_files[0].name if gguf_files else "model.gguf"
+    modelfile_path.write_text(
+        f'FROM ./{gguf_name}\n'
+        f'SYSTEM "{SYSTEM_PROMPT}"\n'
+        f'PARAMETER temperature 0.3\n'
+        f'PARAMETER repeat_penalty 1.1\n',
+        encoding="utf-8",
+    )
+    print(f"  Modelfile 生成: {modelfile_path}")
+    print(f"\n  Ollama へのロード:")
+    print(f"    cd {gguf_out.resolve()}")
+    print(f"    ollama create swallow8b-lora-n{size} -f Modelfile")
+
+
+def export_only(size: int) -> None:
+    """既存の保存済みアダプタを読み込んで GGUF 変換だけ実行する。"""
+    adapter_dir = MODELS_DIR / f"swallow8b_n{size}"
+    if not adapter_dir.exists():
+        raise FileNotFoundError(
+            f"アダプタが見つかりません: {adapter_dir}\n"
+            "  先に --subset {size} で学習を実行してください。"
         )
-        # Ollama 用 Modelfile 生成
-        modelfile_path = gguf_out / "Modelfile"
-        gguf_files = list(gguf_out.glob("*.gguf"))
-        gguf_name  = gguf_files[0].name if gguf_files else "model.gguf"
-        modelfile_path.write_text(
-            f'FROM ./{gguf_name}\n'
-            f'SYSTEM "{SYSTEM_PROMPT}"\n'
-            f'PARAMETER temperature 0.3\n'
-            f'PARAMETER repeat_penalty 1.1\n',
-            encoding="utf-8",
-        )
-        print(f"  Modelfile 生成: {modelfile_path}")
-        print(f"\n  Ollama へのロード:")
-        print(f"    cd {gguf_out}")
-        print(f"    ollama create swallow8b-lora-n{size} -f Modelfile")
+    print(f"\n{'='*60}")
+    print(f"  GGUF エクスポートのみ: subset={size}問")
+    print(f"  アダプタ読み込み元: {adapter_dir}")
+    print(f"{'='*60}")
+
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name      = str(adapter_dir),
+        max_seq_length  = MAX_SEQ_LEN,
+        dtype           = None,
+        load_in_4bit    = LOAD_4BIT,
+    )
+    export_gguf_from_model(model, tokenizer, size)
 
 
 # ──────────────────────────────────────────────
@@ -290,6 +317,11 @@ def main():
         "--export_gguf",
         action="store_true",
         help="学習後に GGUF (Q4_K_M) へエクスポートする",
+    )
+    parser.add_argument(
+        "--export_only",
+        action="store_true",
+        help="学習をスキップして保存済みアダプタから GGUF 変換だけ実行する",
     )
     parser.add_argument(
         "--base_model",
@@ -312,6 +344,14 @@ def main():
     print(f"  GGUF 出力    : {args.export_gguf}")
     print(f"  LoRA r={LORA_R}, alpha={LORA_ALPHA}, epoch={TRAIN_EPOCHS}")
     print(f"  バッチ={PER_DEVICE_BATCH} × accum={GRAD_ACCUMULATION} = {PER_DEVICE_BATCH*GRAD_ACCUMULATION} (実効)")
+
+    # --export_only: 学習不要・既存アダプタから GGUF 変換のみ
+    if args.export_only:
+        print("\n  [export_only] 学習をスキップして GGUF エクスポートを実行します")
+        for size in sizes:
+            export_only(size)
+        print("\n=== GGUF エクスポート完了 ===")
+        return
 
     for size in sizes:
         train_one(size, export_gguf=args.export_gguf)
