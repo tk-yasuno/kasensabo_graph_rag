@@ -552,8 +552,8 @@ python scripts/05_train_lora_unsloth.py --subset 100
 # 全 4 段階を順番に実行
 python scripts/05_train_lora_unsloth.py --subset all
 
-# GGUF エクスポート + Ollama Modelfile 生成
-python scripts/05_train_lora_unsloth.py --subset 715 --export_gguf
+# 保存済みアダプタを 16-bit にマージ（学習スキップ）→ GGUF 変換は下記ガイド参照
+python scripts/05_train_lora_unsloth.py --subset 715 --export_only
 ```
 
 **出力:**
@@ -564,11 +564,11 @@ models/gguf/swallow8b_lora_n{N}/     ← GGUF Q4_K_M + Modelfile (--export_gguf 
 data/lora/train_loss_{N}.json        ← 学習ロス履歴
 ```
 
-**Ollama へのロード (--export_gguf 後):**
+**Ollama へのロード (GGUF 変換後):**
 
 ```powershell
-cd models/gguf/swallow8b_lora_n715
-ollama create swallow8b-lora-n715 -f Modelfile
+# 詳細な変換手順は「GGUF Quantize Guide (Windows)」セクションを参照
+ollama create swallow8b-lora-n715 -f C:\ollama_import\Modelfile_q4
 ```
 
 ### Convergence Check Plan
@@ -582,6 +582,103 @@ ollama create swallow8b-lora-n715 -f Modelfile
 
 Loss monotonically decreases with dataset size → **stable convergence confirmed**.  
 Adapter saved to `models/lora/swallow8b_n{N}/` (safetensors format).
+
+---
+
+### GGUF Quantize Guide (Windows)
+
+> **Why this guide exists**  
+> `unsloth`'s built-in `save_pretrained_gguf()` internally attempts to download and build  
+> `llama.cpp` via `apt` (Linux package manager), which **hangs silently on Windows**.  
+> The workaround is to use the official llama.cpp Windows release binary directly.
+
+#### Step 0 — Prerequisites
+
+```powershell
+# Download llama.cpp Windows CPU binary (b8185 or later)
+$url = "https://github.com/ggerganov/llama.cpp/releases/download/b8185/llama-b8185-bin-win-cpu-x64.zip"
+Invoke-WebRequest -Uri $url -OutFile "C:\llama_cpp\llama-win.zip" -UseBasicParsing
+Expand-Archive -Path "C:\llama_cpp\llama-win.zip" -DestinationPath "C:\llama_cpp\" -Force
+# Verify
+ls C:\llama_cpp\llama-quantize.exe
+```
+
+```powershell
+# Download convert script (match the release tag)
+Invoke-WebRequest `
+  -Uri "https://raw.githubusercontent.com/ggerganov/llama.cpp/b8185/convert_hf_to_gguf.py" `
+  -OutFile "C:\llama_cpp\convert_hf_to_gguf.py" -UseBasicParsing
+
+# Install Python deps for the script
+pip install gguf protobuf "sentencepiece>=0.1.98"
+```
+
+#### Step 1 — Merge adapter → 16-bit safetensors
+
+```powershell
+# --export_only: loads saved adapter, merges into full 16-bit model, skips retraining
+python scripts/05_train_lora_unsloth.py --subset 715 --export_only
+```
+
+Output: `models/gguf/swallow8b_lora_n715/` (merged safetensors, ~15.3 GB)
+
+#### Step 2 — Convert to GGUF bf16
+
+```powershell
+python C:\llama_cpp\convert_hf_to_gguf.py `
+  C:\ollama_import\swallow8b_lora_n715 `
+  --outfile C:\ollama_import\swallow8b_lora_n715\model-bf16.gguf `
+  --outtype bf16
+```
+
+> **Tip**: Copy the merged model folder to a path outside the project (e.g. `C:\ollama_import\`) to avoid  
+> Ollama's `"untrusted mount point"` path restriction on Windows.
+
+#### Step 3 — Quantize to Q4_K_M
+
+```powershell
+C:\llama_cpp\llama-quantize.exe `
+  C:\ollama_import\swallow8b_lora_n715\model-bf16.gguf `
+  C:\ollama_import\swallow8b_lora_n715\model-q4_k_m.gguf `
+  Q4_K_M
+```
+
+| Before (bf16) | After (Q4_K_M) | Compression |
+|---|---|---|
+| 15,317 MiB | 4,685 MiB | 3.3× |
+
+Elapsed: ~2.3 min on CPU (AMD / Intel AVX2, 16-thread)
+
+#### Step 4 — Register in Ollama
+
+Create a `Modelfile` pointing directly to the `.gguf` file (not a directory):
+
+```
+FROM C:\ollama_import\swallow8b_lora_n715\model-q4_k_m.gguf
+SYSTEM "あなたは河川砂防技術基準（調査・計画・設計・維持管理）を熟知した専門家です。正確で実務的な回答をしてください。"
+PARAMETER temperature 0.3
+PARAMETER repeat_penalty 1.1
+```
+
+```powershell
+ollama create swallow8b-lora-n715 -f C:\ollama_import\Modelfile_q4
+ollama list | Select-String "swallow8b-lora"
+# → swallow8b-lora-n715:latest    4.9 GB
+```
+
+#### Step 5 — Smoke test
+
+```powershell
+ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主な変状を挙げてください。"
+```
+
+#### Known Issues on Windows
+
+| Issue | Cause | Fix |
+|---|---|---|
+| `unsloth save_pretrained_gguf` hangs | Tries `apt install cmake ...` (Linux only) | Use llama.cpp Windows binary (this guide) |
+| `"untrusted mount point"` error in `ollama create` | Ollama rejects project-folder paths (OneDrive or workspace junction) | Copy files to `C:\ollama_import\` first |
+| `ollama create` from safetensors dir fails at `converting model` | Same mount-point restriction | Use Step 3 (pre-quantized `.gguf`) instead |
 
 ---
 
@@ -604,6 +701,11 @@ Adapter saved to `models/lora/swallow8b_n{N}/` (safetensors format).
   | 500 Q | 0.6045 | 20.0 min |
   | 715 Q | **0.5565** | 28.5 min |
 
+- **n=715 アダプタを GGUF Q4_K_M に変換・Ollama 登録完了**
+  - `--export_only` フラグでアダプタマージのみを実行（再学習不要）
+  - Windows 環境の制約 (apt ハング / mount-point 制限) に対応する手順を GGUF Quantize Guide として README に記載
+  - `swallow8b-lora-n715:latest` 登録 (4.9 GB, bf16 15.3 GB → Q4_K_M 4.7 GB)
+  - 推論テスト OK (河川砂防専門応答を確認)
 - `generate_lora_train_Lesson.md`: データ生成エラー分析と改善策
 
 ### v0.4 — 2026-03-02
