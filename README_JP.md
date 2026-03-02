@@ -3,22 +3,26 @@
 河川砂防技術基準（調査編・計画編・設計編・維持管理編）を **Neo4j 知識グラフ** に構造化し、
 **GPT-OSS Swallow 20B** と **GraphRAG** の性能を比較する実験基盤です。
 
-> **v0.3** — 2026-03-01
-> LLM バックエンド: [GPT-OSS Swallow 20B RL v0.1](https://swallow-llm.github.io/gptoss-swallow.ja.html)
-> (東京科学大学 × 産総研 — GPT-OSS を日本語・推論強化した Apache 2.0 モデル)
+> **v0.6** — 2026-03-03  
+> ベストモデル: **Swallow-8B-Instruct QLoRA FT (n=715)** — 100問ベンチマーク Judge avg **2.92 / 3**  
+> ベースライン: [GPT-OSS Swallow 20B RL v0.1](https://swallow-llm.github.io/gptoss-swallow.ja.html)（東京科学大学 × 産総研 / Apache 2.0）
+
+🇬🇧 English version: [README.md](README.md)
 
 ---
 
-## 動作確認済み構成（v0.3）
+## 動作確認済み構成（v0.6）
 
 | コンポーネント | 詳細 |
 |---|---|
-| LLM | GPT-OSS Swallow 20B RL v0.1 (Q4_K_M, 15.8GB) via Ollama |
+| ベストモデル (Case B) | Swallow-8B-Instruct QLoRA FT n=715 (Q4_K_M, 4.9 GB) via Ollama |
+| ベースラインモデル (Case A/C) | GPT-OSS Swallow 20B RL v0.1 (Q4_K_M, 15.8 GB) via Ollama |
 | グラフ DB | Neo4j 2026.01.4 (Desktop) |
-| グラフ規模 | 200ノード・268リレーション（手動 CSV）|
+| グラフ規模 | 184 ノード・268 リレーション（手動 CSV）|
 | API | FastAPI 0.111 + uvicorn (port 8080) |
+| GPU | NVIDIA GeForce RTX 4060 Ti (16 GB VRAM) |
 | Python | 3.12 |
-| 評価 5問スコア | Case A: 2.00/3 → Case C: **2.60/3**（+0.60）|
+| 100問ベンチマーク (v0.6) | Case A: 2.29/3 · Case B: **2.92/3** · Case C: 2.62/3 |
 
 ### v0.1 既知の技術的注意点
 
@@ -590,9 +594,276 @@ GraphRAG の優位性は「**技術基準に依拠した専門用語・章節引
 
 ---
 
-### v0.1 — 2026-03-01
+## v0.4 — 100問フルベンチマーク（2026-03-02）
 
-- 初期リリース
+全 8 カテゴリ: 調査 / 計画 / 設計 / 維持管理（河川・ダム・砂防） / 災害 / クロスドメイン
+
+### スコア分布
+
+| スコア | Case A | Case C |
+|---|---|---|
+| 3 | **60**（60%）| **77**（77%）|
+| 2 | 12（12%）| 10（10%）|
+| 1 | 25（25%）| 11（11%）|
+| 0 | 3（3%）| 2（2%）|
+| **平均** | **2.29 / 3** | **2.62 / 3** |
+
+**C − A = +0.33** &nbsp;|&nbsp; C > A: 36問 &nbsp;|&nbsp; A > C: 17問 &nbsp;|&nbsp; 同点: 47問
+
+### カテゴリ別スコア
+
+| カテゴリ | N | A avg | C avg | C-A |
+|---|---|---|---|---|
+| 調査 | 7 | 2.14 | 2.57 | +0.43 |
+| 計画 | 8 | 2.75 | 2.62 | **-0.12** |
+| 設計 | 15 | 2.13 | 2.60 | +0.47 |
+| 維持管理 — 河川 | 20 | 2.05 | 2.55 | +0.50 |
+| 維持管理 — ダム | 15 | 2.47 | 2.73 | +0.27 |
+| 維持管理 — 砂防 | 15 | 2.33 | 2.53 | +0.20 |
+| 災害 | 10 | 2.40 | 2.60 | +0.20 |
+| クロスドメイン | 10 | 2.30 | 2.80 | **+0.50** |
+
+### レイテンシ（100問）
+
+| 指標 | Case A（プレーン LLM）| Case C（GraphRAG）| 差分 |
+|---|---|---|---|
+| 平均 | 42.2 s | **31.1 s** | −11.1 s |
+| 合計 | 70.3 min | **51.9 min** | −18.4 min |
+
+C は 96/100 問で高速 — グラフコンテキストが LLM の出力空間を制約してトークン生成を短縮。
+
+---
+
+## v0.6 — Case B 100問ベンチマーク（2026-03-02）
+
+モデル: **`swallow8b-lora-n715`** — Swallow-8B-Instruct QLoRA FT（グラフ由来 QA 715件）  
+エンドポイント: `POST /query/plain`（Case A と同じ、LoRA FT モデルを使用）
+
+### A / B / C 三者比較
+
+| 指標 | Case A（20B プレーン）| Case B（8B LoRA FT）| Case C（20B GraphRAG）|
+|---|---|---|---|
+| ベースモデル | GPT-OSS Swallow 20B | Swallow-8B LoRA n=715 | GPT-OSS Swallow 20B |
+| 検索 | なし | なし | Neo4j GraphRAG |
+| 平均応答長 | 2,349 文字 | **284 文字** | 2,452 文字 |
+| 平均レイテンシ | 42.2 s | **14.2 s** | 31.1 s |
+| Judge 平均スコア（/3）| 2.29 | **2.92** | 2.62 |
+| 3点 | 60問（60%）| **92問（92%）** | 77問（77%）|
+| 2点 | 12問 | 8問 | 10問 |
+| 1点 | 25問 | **0問** | 11問 |
+| 0点 | 3問 | **0問** | 2問 |
+
+> **主要発見**: Case B（8B + LoRA FT）は Case A 比 **+0.63**、Case C 比 **+0.30** を達成。  
+> **3倍小さいモデル**で**3倍速い推論**を実現 — ドメイン特化 FT の効果を端的に示す。
+
+### Case B カテゴリ別スコア
+
+| カテゴリ | N | Case B avg | vs Case A | vs Case C |
+|---|---|---|---|---|
+| 調査 | 7 | 2.86 | +0.72 | +0.29 |
+| 計画 | 8 | 2.88 | +0.13 | +0.26 |
+| 設計 | 15 | 2.93 | +0.80 | +0.33 |
+| 維持管理 — 河川 | 20 | 2.95 | +0.90 | +0.40 |
+| 維持管理 — ダム | 15 | 2.93 | +0.46 | +0.20 |
+| 維持管理 — 砂防 | 15 | 2.93 | +0.60 | +0.40 |
+| 災害 | 10 | 2.80 | +0.40 | +0.20 |
+| クロスドメイン | 10 | **3.00** | +0.70 | +0.20 |
+
+---
+
+## 比較考察・教訓（Lessons Learned）
+
+A/B/C 三者比較から得られた知見を 4 種の図で整理する。
+
+---
+
+### ① アプローチ比較 — 推論速度 vs 回答精度（クアドラント図）
+
+> **X軸**: 推論速度（遅い → 速い）、(max_latency − latency) / range で正規化  
+> **Y軸**: Judge 平均スコア（/3）、(avg − 2.0) / 1.0 で正規化
+
+![アプローチ比較：推論速度 vs 回答精度](docs/figures/fig1_quadrant.png)
+
+**教訓①** — Case B（LoRA FT）は **右上の理想ゾーン** に単独で位置する。  
+小型モデル（8B）へのドメイン特化 FT が、大型モデル 20B + 外部知識検索（GraphRAG）の組み合わせを速度・精度の両軸で凌駕した。
+
+---
+
+### ② Judge スコア比較
+
+> 全 100問のスコア平均とスコア分布を Case A / B / C で比較する
+
+![Judge スコア比較](docs/figures/fig2_scores.png)
+
+| Case | モデル | Judge avg | 3点率 | 0-1点率 | 平均レイテンシ |
+|---|---|---|---|---|---|
+| **A** | GPT-OSS Swallow 20B（プレーン）| 2.29 | 60% | 28% | 42.2 s |
+| **B** 🏆 | Swallow-8B LoRA FT（n=715）| **2.92** | **92%** | **0%** | **14.2 s** |
+| **C** | GPT-OSS Swallow 20B（GraphRAG）| 2.62 | 77% | 13% | 31.1 s |
+
+**教訓②** — LoRA FT により **3倍小さい・3倍速いモデル** で GraphRAG を +0.30 上回るスコアを達成。  
+ファインチューニングは知識検索（RAG）の代替・あるいは補完戦略として極めて有効。
+
+---
+
+### ③ アーキテクチャ比較（フローチャート）
+
+```mermaid
+flowchart LR
+    Q[/"質問 100問"/]
+
+    subgraph A["Case A — ベースライン"]
+        A1["GPT-OSS Swallow 20B<br/>汎用モデル"]
+        A2["Score: 2.29/3<br/>Latency: 42.2 s"]
+    end
+
+    subgraph B["Case B — LoRA FT（Best）"]
+        B1["Swallow-8B<br/>QLoRA n=715"]
+        B2["Score: 2.92/3<br/>Latency: 14.2 s"]
+    end
+
+    subgraph C["Case C — GraphRAG"]
+        C1["Neo4j<br/>知識グラフ"]
+        C2["GPT-OSS Swallow 20B<br/>+ グラフコンテキスト"]
+        C3["Score: 2.62/3<br/>Latency: 31.1 s"]
+    end
+
+    Q --> A1 --> A2
+    Q --> B1 --> B2
+    Q --> C1 --> C2 --> C3
+```
+
+**教訓③** — Case B は **最もシンプルなパイプライン**（推論時に外部 DB 不要）で最高精度を達成。
+
+---
+
+### ④ アプローチ進化の軌跡
+
+![アプローチ進化の軌跡](docs/figures/fig3_evolution.png)
+
+**教訓④** — 「汎用大型 LLM → 知識グラフ強化 → ドメイン特化 FT」という実験の進化の中で、  
+最終的にファインチューニングが **最も根本的かつ効率的** な解決策であることが示された。
+
+---
+
+### まとめ — 3つの教訓
+
+| # | 教訓 | 内容 | 示唆 |
+|---|---|---|---|
+| **①** | **スケールより特化** | 20B 汎用 (2.29) < 8B LoRA FT (2.92) | パラメータ数より学習データの質・ドメイン整合性が精度を支配する |
+| **②** | **FT と RAG は代替関係** | GraphRAG +0.33 vs LoRA FT +0.63 | 知識をモデルに内在化する方が安定した精度向上をもたらす |
+| **③** | **効率性の逆転** | 8B FT が 20B+RAG より 3倍速 | ドメイン FT はレイテンシ・コスト面でも压倒的に有利 |
+
+> **次の実験候補 (Case D)**: 8B LoRA FT + GraphRAG の組み合わせが Case B をさらに上回るか？
+
+---
+
+## Case B — LoRA ファインチューニング
+
+### 環境
+
+| コンポーネント | バージョン / 値 |
+|---|---|
+| ベースモデル | `tokyotech-llm/Llama-3-Swallow-8B-Instruct-v0.1` |
+| フレームワーク | unsloth 2026.2.1 |
+| PyTorch | `2.6.0+cu124` |
+| CUDA Toolkit | 12.4 |
+| triton-windows | `3.2.0.post21`（3.5.x/3.6.x は API 不整合で動作不可）|
+| GPU | NVIDIA GeForce RTX 4060 Ti (16 GB VRAM) |
+
+> **注意 — triton バージョン固定**  
+> ```powershell
+> pip install "unsloth[cu124-ampere]" trl transformers datasets accelerate
+> pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+> pip install "triton-windows==3.2.0.post21"
+> ```
+
+### QLoRA 主要パラメータ
+
+| パラメータ | 値 |
+|---|---|
+| `lora_r` / `lora_alpha` | 16 / 16 |
+| `target_modules` | q/k/v/o/gate/up/down proj（7層）|
+| `load_in_4bit` | True（NF4 量子化）|
+| `num_train_epochs` | 3 |
+| `learning_rate` | 2e-4（cosine スケジューラ）|
+| `packing` | False（Windows triton JIT ハング回避）|
+
+### 収束確認
+
+| Subset | 問数 | Final Loss | 学習時間 |
+|---|---|---|---|
+| 100 | 100 | 0.7958 | 4.4 min |
+| 250 | 250 | 0.6859 | 10.2 min |
+| 500 | 500 | 0.6045 | 20.0 min |
+| 715 | 715 | **0.5565** | 28.5 min |
+
+### GGUF 変換・Ollama 登録（主要手順）
+
+```powershell
+# Step 1: アダプタマージ
+python scripts/05_train_lora_unsloth.py --subset 715 --export_only
+
+# Step 2: GGUF bf16 変換
+python C:\llama_cpp\convert_hf_to_gguf.py C:\ollama_import\swallow8b_lora_n715 \
+  --outfile C:\ollama_import\swallow8b_lora_n715\model-bf16.gguf --outtype bf16
+
+# Step 3: Q4_K_M 量子化（bf16 15.3 GB → Q4_K_M 4.7 GB）
+C:\llama_cpp\llama-quantize.exe \
+  C:\ollama_import\swallow8b_lora_n715\model-bf16.gguf \
+  C:\ollama_import\swallow8b_lora_n715\model-q4_k_m.gguf Q4_K_M
+
+# Step 4: Ollama 登録
+ollama create swallow8b-lora-n715 -f C:\ollama_import\Modelfile_q4
+```
+
+詳細手順は [README.md の GGUF Quantize Guide](README.md#gguf-quantize-guide-windows) を参照。
+
+---
+
+## 更新履歴
+
+
+
+- **Case B 100問評価完了**（`results_b_20260302_214650.md`）
+  - `swallow8b-lora-n715` で全 100問を評価
+  - Judge 平均 **2.92/3**（92問 3点、8問 2点、0点・1点は 0問）
+  - **Case A (2.29)・Case C (2.62) を上回り、三者中最高スコア**
+- `scripts/04_evaluate.py`: `--case-b` フラグ追加
+- `scripts/06_plot_abc_comparison.py`: matplotlib による A/B/C 比較図生成（日本語版・英語版）
+- `docs/figures/`: PNG 6枚追加
+- README_JP.md v0.6 対応（Lessons Learned・Case B セットアップ追記）
+
+### v0.5 — 2026-03-02
+
+- **Case B LoRA 学習データ整備完了**
+  - `scripts/03b_generate_lora_qa_graph.py`: 268 リレーション × 3問 = 715問生成
+  - `scripts/04a_make_subsets.py`: rel_type 層別サンプリングで 4段階サブセット生成
+  - `scripts/05_train_lora_unsloth.py`: Swallow-8B-Instruct QLoRA 学習スクリプト
+- **unsloth 環境セットアップ確立**（torch 2.6.0+cu124 / triton-windows 3.2.0.post21）
+  - 既知の問題: `packing=True` が triton JIT でハング → `packing=False` + `TORCHDYNAMO_DISABLE=1` で解消
+- **4段階 QLoRA 学習完了・安定収束確認**
+
+  | Subset | Loss | 学習時間 |
+  |---|---|---|
+  | 100 Q | 0.7958 | 4.4 min |
+  | 250 Q | 0.6859 | 10.2 min |
+  | 500 Q | 0.6045 | 20.0 min |
+  | 715 Q | **0.5565** | 28.5 min |
+
+- **n=715 アダプタを GGUF Q4_K_M に変換・Ollama 登録完了**
+  - `swallow8b-lora-n715:latest` 登録（4.9 GB; bf16 15.3 GB → Q4_K_M 4.7 GB）
+  - Windows 環境の制約対応手順を GGUF Quantize Guide として記載
+
+### v0.4 — 2026-03-02
+
+- **100問フル評価**（8カテゴリ全体）
+- A avg 2.29 / C avg 2.62（+0.33 の GraphRAG 効果を確認）
+- C が 96/100 問で高速（A: 42.2 s → C: 31.1 s、−11.1 s）
+- `graph_hits` avg 33.8; 適応リトライ発動 8問（全問 ≥ 25 に回復）
+- 「計画」カテゴリで C < A（Chapter メタデータの過剰検索が原因と推定）
+
+### v0.1 — 2026-03-01
 - LLM: GPT-OSS Swallow 20B RL v0.1 (Ollama, Q4_K_M)
   - 東京科学大学 × 産総研による GPT-OSS の日本語・推論強化版
   - Apache 2.0 ライセンス

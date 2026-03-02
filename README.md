@@ -4,24 +4,26 @@ An experimental platform that structures Japan's **River & Sediment Control Tech
 (Survey / Planning / Design / Maintenance editions) into a **Neo4j knowledge graph**
 and compares the performance of **GPT-OSS Swallow 20B** with and without **GraphRAG**.
 
-> **v0.3** — 2026-03-01  
-> LLM backend: [GPT-OSS Swallow 20B RL v0.1](https://swallow-llm.github.io/gptoss-swallow.ja.html)  
-> (Tokyo Tech × AIST — Japanese/reasoning-enhanced Apache 2.0 model built on GPT-OSS)
+> **v0.6** — 2026-03-03  
+> Best model: **Swallow-8B-Instruct QLoRA FT (n=715)** — Judge avg **2.92 / 3** on 100-question benchmark  
+> Baseline comparison: [GPT-OSS Swallow 20B RL v0.1](https://swallow-llm.github.io/gptoss-swallow.ja.html) (Tokyo Tech × AIST / Apache 2.0)
 
 🇯🇵 Japanese version: [README_JP.md](README_JP.md)
 
 ---
 
-## Verified Configuration (v0.3)
+## Verified Configuration (v0.6)
 
 | Component | Details |
 |---|---|
-| LLM | GPT-OSS Swallow 20B RL v0.1 (Q4_K_M, 15.8 GB) via Ollama |
+| Best model (Case B) | Swallow-8B-Instruct QLoRA FT n=715 (Q4_K_M, 4.9 GB) via Ollama |
+| Baseline model (Case A/C) | GPT-OSS Swallow 20B RL v0.1 (Q4_K_M, 15.8 GB) via Ollama |
 | Graph DB | Neo4j 2026.01.4 (Desktop) |
 | Graph size | 184 nodes · 268 relations (manual CSV) |
 | API | FastAPI 0.111 + uvicorn (port 8080) |
+| GPU | NVIDIA GeForce RTX 4060 Ti (16 GB VRAM) |
 | Python | 3.12 |
-| 14-Q score (v0.3) | Case A: **2.21/3** → Case C: **2.71/3** (+0.50) |
+| 100-Q benchmark (v0.6) | Case A: 2.29/3 · Case B: **2.92/3** · Case C: 2.62/3 |
 
 ---
 
@@ -514,6 +516,99 @@ Endpoint: `POST /query/plain` (same as Case A, but with LoRA FT model loaded)
 
 ---
 
+## Lessons Learned — A / B / C Comparison
+
+Four visualisations summarising the key findings from the three-way A/B/C comparison.
+
+---
+
+### ① Approach Trade-off — Inference Speed vs Answer Quality
+
+> **X-axis**: Inference speed (slow → fast), normalised as (max_latency − latency) / range  
+> **Y-axis**: Judge average score (/3), normalised as (avg − 2.0) / 1.0
+
+![Approach Trade-off: Inference Speed vs Answer Quality](docs/figures/fig1_quadrant_en.png)
+
+**Lesson ①** — Case B (LoRA FT) sits alone in the **upper-right ideal zone**.  
+Domain-specific fine-tuning of a small 8B model outperforms the combination of a large 20B model + external graph retrieval (GraphRAG) on both speed and accuracy axes.
+
+---
+
+### ② Judge Score Comparison
+
+> Overall average scores and score distributions across all 100 questions for Case A / B / C.
+
+![Judge Score Comparison](docs/figures/fig2_scores_en.png)
+
+| Case | Model | Judge avg | Score-3 rate | Score 0–1 rate | Latency avg |
+|---|---|---|---|---|---|
+| **A** | GPT-OSS Swallow 20B (Plain) | 2.29 | 60% | 28% | 42.2 s |
+| **B** 🏆 | Swallow-8B LoRA FT (n=715) | **2.92** | **92%** | **0%** | **14.2 s** |
+| **C** | GPT-OSS Swallow 20B (GraphRAG) | 2.62 | 77% | 13% | 31.1 s |
+
+**Lesson ②** — LoRA fine-tuning achieves a score **+0.30 above GraphRAG** using a model **3× smaller** at **3× faster latency**.  
+Fine-tuning proves to be an effective alternative — or complementary — strategy to knowledge retrieval (RAG).
+
+---
+
+### ③ Architecture Comparison (Flowchart)
+
+> Structural comparison of the inference pipeline and final scores for each case.
+
+```mermaid
+flowchart LR
+    Q[/"100 Questions"/]
+
+    subgraph A["Case A — Baseline"]
+        A1["GPT-OSS Swallow 20B<br/>General-purpose"]
+        A2["Score: 2.29/3<br/>Latency: 42.2 s"]
+    end
+
+    subgraph B["Case B — LoRA FT  (Best)"]
+        B1["Swallow-8B<br/>QLoRA n=715"]
+        B2["Score: 2.92/3<br/>Latency: 14.2 s"]
+    end
+
+    subgraph C["Case C — GraphRAG"]
+        C1["Neo4j<br/>Knowledge Graph"]
+        C2["GPT-OSS Swallow 20B<br/>+ Graph Context"]
+        C3["Score: 2.62/3<br/>Latency: 31.1 s"]
+    end
+
+    Q --> A1 --> A2
+    Q --> B1 --> B2
+    Q --> C1 --> C2 --> C3
+```
+
+**Lesson ③** — Case B achieves the highest accuracy with **the simplest pipeline** (no external DB at inference time).  
+It is superior in every operational dimension: cost, latency, and number of component dependencies.
+
+---
+
+### ④ Evolution of Approaches
+
+> Tracing the experimental phases and visualising accuracy gains at each step.
+
+![Evolution of Approaches and Accuracy Improvement](docs/figures/fig3_evolution_en.png)
+
+**Lesson ④** — Across the progression "general large LLM → knowledge-graph augmentation → domain-specific FT",  
+fine-tuning emerged as the **most fundamental and efficient** solution.
+
+---
+
+### Summary — Three Key Lessons
+
+| # | Lesson | Finding | Implication |
+|---|---|---|---|
+| **①** | **Specialisation over scale** | 20B general (2.29) < 8B LoRA FT (2.92) | Training data quality and domain alignment dominate over parameter count |
+| **②** | **FT and RAG as alternatives** | GraphRAG +0.33 vs LoRA FT +0.63 | Internalising knowledge into the model yields more stable gains than runtime retrieval |
+| **③** | **Efficiency reversal** | 8B FT is 3× faster than 20B+RAG | Domain FT is decisively superior in latency and operational cost |
+
+> **Next experiment candidate (Case D)**: Does 8B LoRA FT + GraphRAG exceed Case B?  
+> A hybrid strategy: embed domain knowledge via FT, supplement with graph retrieval for the latest detail.
+
+---
+
 ## Case B — LoRA Fine-tuning Setup
 
 ### Environment
@@ -733,24 +828,27 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
 
 ## Changelog
 
-### v0.6 — 2026-03-02
+### v0.6 — 2026-03-03
 
-- **Case B 100問評価完了** (`results_b_20260302_214650.md`)
-  - `swallow8b-lora-n715` (Swallow-8B LoRA FT, n=715) で全 100問を評価
-  - Judge 平均 **2.92/3**（92問 3点、8問 2点、0点・1点は 0問）
-  - **Case A (2.29)・Case C (2.62) を上回り、三者中最高スコア**
-- `scripts/04_evaluate.py`: `--case-b` フラグ追加（`/query/plain` のみ実行、`case_b` ラベリング）
-- `generate_summary_b()` による Case B 専用レポート生成機能追加
+- **Case B 100-question evaluation complete** (`results_b_20260302_214650.md`)
+  - Evaluated all 100 questions using `swallow8b-lora-n715` (Swallow-8B LoRA FT, n=715)
+  - Judge avg **2.92/3** — 92 questions at 3 pts, 8 questions at 2 pts, 0 questions at 0–1 pts
+  - **Highest score among all three cases**, surpassing Case A (2.29) and Case C (2.62)
+- `scripts/04_evaluate.py`: Added `--case-b` flag (calls `/query/plain` only, labels output as `case_b`)
+- Added `generate_summary_b()` for Case B dedicated report generation
+- `scripts/06_plot_abc_comparison.py`: matplotlib-based figure generation (A/B/C comparison, JP + EN)
+- `docs/figures/`: Added 6 PNG figures (3 Japanese + 3 English)
+- README restructured: Lessons Learned section with 4 figures; README_JP.md added
 
 ### v0.5 — 2026-03-02
 
-- **Case B LoRA 学習データ整備完了**
-  - `scripts/03b_generate_lora_qa_graph.py`: 268 リレーション × 3問 = 715問生成
-  - `scripts/04a_make_subsets.py`: rel_type 層別サンプリングで 4段階サブセット生成
-  - `scripts/05_train_lora_unsloth.py`: Swallow-8B-Instruct QLoRA 学習スクリプト
-- **unsloth 環境セットアップ確立** (torch 2.6.0+cu124 / triton-windows 3.2.0.post21)
-  - 既知の問題: `packing=True` が triton JIT でハング → `packing=False` + `TORCHDYNAMO_DISABLE=1` で解消
-- **4段階 QLoRA 学習完了・安定収束確認**
+- **Case B LoRA training data preparation complete**
+  - `scripts/03b_generate_lora_qa_graph.py`: 268 relations × 3 Q = 715 QA pairs generated
+  - `scripts/04a_make_subsets.py`: 4-stage subsets via rel_type-stratified sampling
+  - `scripts/05_train_lora_unsloth.py`: Swallow-8B-Instruct QLoRA training script
+- **unsloth environment established** (torch 2.6.0+cu124 / triton-windows 3.2.0.post21)
+  - Known issue: `packing=True` hangs in triton JIT → resolved with `packing=False` + `TORCHDYNAMO_DISABLE=1`
+- **4-stage QLoRA training complete — stable convergence confirmed**
 
   | Subset | Loss | Time |
   |---|---|---|
@@ -759,12 +857,11 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
   | 500 Q | 0.6045 | 20.0 min |
   | 715 Q | **0.5565** | 28.5 min |
 
-- **n=715 アダプタを GGUF Q4_K_M に変換・Ollama 登録完了**
-  - `--export_only` フラグでアダプタマージのみを実行（再学習不要）
-  - Windows 環境の制約 (apt ハング / mount-point 制限) に対応する手順を GGUF Quantize Guide として README に記載
-  - `swallow8b-lora-n715:latest` 登録 (4.9 GB, bf16 15.3 GB → Q4_K_M 4.7 GB)
-  - 推論テスト OK (河川砂防専門応答を確認)
-- `generate_lora_train_Lesson.md`: データ生成エラー分析と改善策
+- **n=715 adapter converted to GGUF Q4_K_M and registered in Ollama**
+  - `--export_only` flag merges adapter without retraining
+  - Windows-specific issues (apt hang / mount-point restriction) documented in GGUF Quantize Guide
+  - `swallow8b-lora-n715:latest` registered (4.9 GB; bf16 15.3 GB → Q4_K_M 4.7 GB)
+  - Smoke test passed (domain-specific river-sabo responses confirmed)
 
 ### v0.4 — 2026-03-02
 
