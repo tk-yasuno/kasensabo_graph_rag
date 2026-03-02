@@ -42,7 +42,7 @@ except ImportError as e:
 # ──────────────────────────────────────────────
 # 定数
 # ──────────────────────────────────────────────
-BASE_MODEL      = "tokyotech-llm/Swallow-8B-instruct-hf"
+BASE_MODEL      = "tokyotech-llm/Llama-3-Swallow-8B-Instruct-v0.1"
 MAX_SEQ_LEN     = 2048
 LOAD_4BIT       = True
 
@@ -73,11 +73,14 @@ SYSTEM_PROMPT = (
 )
 
 # ──────────────────────────────────────────────
-# Swallow-8B-Instruct プロンプトフォーマット
-# LLaMA-2 Instruction 形式
+# Llama-3-Swallow-8B-Instruct プロンプトフォーマット
+# Meta Llama-3 Instruct 形式
 # ──────────────────────────────────────────────
 PROMPT_TEMPLATE = (
-    "<s>[INST] <<SYS>>\n{system}\n<</SYS>>\n\n{instruction} [/INST] {output}</s>"
+    "<|begin_of_text|>"
+    "<|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|>"
+    "<|start_header_id|>user<|end_header_id|>\n\n{instruction}<|eot_id|>"
+    "<|start_header_id|>assistant<|end_header_id|>\n\n{output}<|eot_id|>"
 )
 
 
@@ -269,6 +272,8 @@ def train_one(size: int, export_gguf: bool = False) -> None:
 # メイン
 # ──────────────────────────────────────────────
 def main():
+    global BASE_MODEL  # 関数先頭で宣言
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--subset",
@@ -288,8 +293,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # ベースモデルをグローバルに反映
-    global BASE_MODEL
+    # ベースモデル上書き
     BASE_MODEL = args.base_model
 
     if args.subset == "all":

@@ -310,7 +310,7 @@ curl http://localhost:8080/graph/maintenance
 | Case | Description | Endpoint |
 |---|---|---|
 | **A — Plain LLM** | No knowledge graph, no fine-tuning | `POST /query/plain` |
-| **B — LoRA FT** | LLM fine-tuned on technical standard QA | Change `LLM_MODEL` to FT model |
+| **B — LoRA FT** | Swallow-8B-Instruct QLoRA fine-tuned on graph-derived QA | Change `LLM_MODEL` to FT model |
 | **C — GraphRAG** | Neo4j knowledge graph + LLM | `POST /query` |
 
 ### LLM-as-Judge Scoring Rubric
@@ -465,7 +465,133 @@ All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Ha
 
 ---
 
+## Case B — LoRA Fine-tuning Setup
+
+### Environment
+
+| Component | Version / Value |
+|---|---|
+| Base model | `tokyotech-llm/Llama-3-Swallow-8B-Instruct-v0.1` (HuggingFace) |
+| Framework | [unsloth](https://github.com/unslothai/unsloth) 2026.2.1 |
+| PyTorch | `2.6.0+cu124` |
+| CUDA Toolkit | 12.4 |
+| triton-windows | `3.2.0.post21` (torch 2.6.0 対応版; 3.5.x/3.6.x は API 不整合) |
+| bitsandbytes | 0.49.2 |
+| peft | 0.18.1 |
+| trl | 0.24.0 |
+| transformers | 4.57.6 |
+| GPU | NVIDIA GeForce RTX 4060 Ti (16 GB VRAM) |
+| OS | Windows 11 |
+
+> **注意 — triton バージョン固定**  
+> unsloth は `triton-windows==3.2.0.post21` を **固定** してください。  
+> `pip install "unsloth[cu124-ampere]"` で自動インストールされる `3.6.x` は  
+> `AttrsDescriptor` API の廃止により `torch._inductor` のインポートエラーが発生します。
+>
+> ```powershell
+> pip install "unsloth[cu124-ampere]" trl transformers datasets accelerate
+> pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+> pip install "triton-windows==3.2.0.post21"  # 3.5/3.6 系を上書きダウングレード
+> ```
+
+### QLoRA Hyperparameters (`scripts/05_train_lora_unsloth.py`)
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `lora_r` | 16 | LoRA rank |
+| `lora_alpha` | 16 | スケーリング係数 (= r で等倍) |
+| `lora_dropout` | 0.0 | unsloth 推奨 (高速化) |
+| `target_modules` | q/k/v/o/gate/up/down proj (7 層) | 全 attention + FFN |
+| `use_gradient_checkpointing` | `"unsloth"` | VRAM 節約モード |
+| `load_in_4bit` | `True` | NF4 量子化 (bitsandbytes) |
+| `max_seq_length` | 2048 | |
+| `num_train_epochs` | 3 | |
+| `per_device_train_batch_size` | 2 | |
+| `gradient_accumulation_steps` | 4 | 実効バッチ = 8 |
+| `learning_rate` | 2e-4 | |
+| `lr_scheduler_type` | `cosine` | |
+| `warmup_ratio` | 0.05 | |
+| `weight_decay` | 0.01 | |
+| `packing` | `True` | 短サンプルを連結し GPU 効率化 |
+| `bf16` | `True` (RTX 4060 Ti は対応) | |
+
+### Prompt Format (Llama-3 Instruct)
+
+```
+<|begin_of_text|>
+<|start_header_id|>system<|end_header_id|>
+
+あなたは河川砂防技術基準（調査・計画・設計・維持管理）を熟知した専門家です。正確で実務的な回答をしてください。<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+
+{question}<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+
+{answer}<|eot_id|>
+```
+
+### Training Data & Subsets
+
+| File | Questions | Sampling | Note |
+|---|---|---|---|
+| `data/lora/train_graph_rels.jsonl` | **715** | 全量 | 268 relations × 3 Q; seed 42 |
+| `data/lora/subset_100.jsonl` | 100 | rel_type 層別 | 収束確認 Step 1 |
+| `data/lora/subset_250.jsonl` | 250 | rel_type 層別 | 収束確認 Step 2 |
+| `data/lora/subset_500.jsonl` | 500 | rel_type 層別 | 収束確認 Step 3 |
+| `data/lora/subset_715.jsonl` | 715 | 全量コピー | 収束確認 Step 4 |
+
+データは `scripts/04a_make_subsets.py` で生成。`rel_type` 割合を各段階で保持（seed=42）。  
+テスト 100 問との独立性は文字 bigram Jaccard < 0.45 でフィルタ済み。
+
+### Running Training
+
+```powershell
+# 動作確認（subset=100、約 10〜20 分）
+python scripts/05_train_lora_unsloth.py --subset 100
+
+# 全 4 段階を順番に実行
+python scripts/05_train_lora_unsloth.py --subset all
+
+# GGUF エクスポート + Ollama Modelfile 生成
+python scripts/05_train_lora_unsloth.py --subset 715 --export_gguf
+```
+
+**出力:**
+
+```
+models/lora/swallow8b_n{N}/          ← LoRA アダプタ (safetensors)
+models/gguf/swallow8b_lora_n{N}/     ← GGUF Q4_K_M + Modelfile (--export_gguf 時)
+data/lora/train_loss_{N}.json        ← 学習ロス履歴
+```
+
+**Ollama へのロード (--export_gguf 後):**
+
+```powershell
+cd models/gguf/swallow8b_lora_n715
+ollama create swallow8b-lora-n715 -f Modelfile
+```
+
+### Convergence Check Plan
+
+| Subset | Questions | Expected final loss | Status |
+|---|---|---|---|
+| 100 | 100 | ~1.0–1.5 | ⏳ 実行中 |
+| 250 | 250 | ~0.8–1.2 | ⏳ 待機 |
+| 500 | 500 | ~0.6–1.0 | ⏳ 待機 |
+| 715 | 715 | ~0.5–0.9 | ⏳ 待機 |
+
+---
+
 ## Changelog
+
+### v0.5 — 2026-03-02
+
+- **Case B LoRA 学習データ整備完了**
+  - `scripts/03b_generate_lora_qa_graph.py`: 268 リレーション × 3問 = 715問生成
+  - `scripts/04a_make_subsets.py`: rel_type 層別サンプリングで 4段階サブセット生成
+  - `scripts/05_train_lora_unsloth.py`: Swallow-8B-Instruct QLoRA 学習スクリプト
+- **unsloth 環境セットアップ確立** (torch 2.6.0+cu124 / triton-windows 3.2.0.post21)
+- `generate_lora_train_Lesson.md`: データ生成エラー分析と改善策
 
 ### v0.4 — 2026-03-02
 
