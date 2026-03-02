@@ -609,6 +609,61 @@ fine-tuning emerged as the **most fundamental and efficient** solution.
 
 ---
 
+## Qualitative Analysis — 10 Representative Questions
+
+Full answer texts → [`docs/qa_comparison_10q.md`](docs/qa_comparison_10q.md)
+
+### Score Pattern Summary
+
+| Q# | Category | Sub-category | A | B | C | B−A | Selection Rationale |
+|---|---|---|:---:|:---:|:---:|:---:|---|
+| Q5 | 維持管理_河川 | 堤防 | 0 | **3** | 3 | +3 | Case A hallucination loop |
+| Q14 | 維持管理_河川 | サイクル型 | 3 | **3** | 3 | 0 | All-perfect baseline |
+| Q24 | 維持管理_ダム | 長寿命化 | 0 | **3** | 3 | +3 | Case A hollow answer |
+| Q26 | 維持管理_ダム | 堆砂 | **3** | 2 | 2 | −1 | A beats B (factual recall) |
+| Q37 | 維持管理_砂防 | 臨時点検 | 1 | **3** | 0 | +2 | B=3 / C completely fails |
+| Q52 | 調査 | 水文調査 | **3** | 2 | 1 | −1 | A>B>C (short factual Q) |
+| Q69 | 設計 | 砂防堰堤 | 1 | **3** | 3 | +2 | B closes gap |
+| Q82 | 比較・横断 | 施設比較 | 0 | **3** | 3 | +3 | A score=0, cross-domain Q |
+| Q91 | ハザード | 洪水 | 1 | **3** | 3 | +2 | |
+| Q95 | ハザード | 地すべり | **3** | 2 | 1 | −1 | Model-size advantage for A |
+
+### Key Qualitative Findings
+
+**① Case A (Qwen2.5-14B vanilla) — catastrophic failure on open-ended questions**
+
+Questions Q5, Q24, Q82 received score **0** from the judge.
+Symptom: the model repeated the same phrase hundreds of times (e.g. `＝長寿命化` × 300+ tokens),
+producing zero useful content. This runaway repetition is a well-known inference failure of large general models
+when the prompt falls outside their distribution.
+
+**② Case B (Swallow-8B LoRA FT) — concise, domain-aligned, consistent**
+
+Case B answered the same questions with 200–400 characters of clear, structured prose.
+Score 3/3 was awarded 63 out of 100 times (vs Case A: 55/100, Case C: 52/100).
+The LoRA fine-tuning on domain Q&A data suppressed hallucination and kept responses on-topic.
+
+**③ Case C (Swallow-8B vanilla) — bimodal quality**
+
+Strong on well-structured, retrievable information (e.g. Q37: score 0 — completely off-topic);
+competitive with B on many mid-difficulty questions.
+The GraphRAG context in Case B does not appear to be the sole driver — LoRA FT itself accounts
+for the stability gap vs Case C.
+
+**④ Cases where A outperforms B (Q26, Q52, Q95)**
+
+All three are *short, factual recall* questions with a single correct answer (formula, criterion value, definition).
+The 14B parameter capacity of Qwen2.5 gives it an edge on memorised facts even without domain FT.
+Implication: a hybrid Case D (LoRA FT + RAG) may recover this gap while retaining domain alignment.
+
+**⑤ Case B latency advantage persists across Q types**
+
+Average elapsed time: A = 42.2 s, B = **14.2 s**, C = 31.1 s.
+Even on questions where B scores lower, its response time is 3× faster — a critical property
+for deployment in real-time inspection support tools.
+
+---
+
 ## Case B — LoRA Fine-tuning Setup
 
 ### Environment
@@ -839,6 +894,9 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
 - `scripts/06_plot_abc_comparison.py`: matplotlib-based figure generation (A/B/C comparison, JP + EN)
 - `docs/figures/`: Added 6 PNG figures (3 Japanese + 3 English)
 - README restructured: Lessons Learned section with 4 figures; README_JP.md added
+- `scripts/07_compare_qa_table.py`: 10 representative Q&A comparison table generator
+- `docs/qa_comparison_10q.md`: Full answer texts for A/B/C on 10 selected questions (qualitative analysis)
+- README: Added "Qualitative Analysis — 10 Representative Questions" section (5 key findings)
 
 ### v0.5 — 2026-03-02
 
