@@ -448,6 +448,55 @@ All 8 categories: Survey / Planning / Design / Maintenance (River+Dam+Sabo) / Ha
 | Metric | Value |
 |---|---|
 | Output length avg | A: 2,349 chars / C: 2,452 chars |
+
+---
+
+### v0.6 — Case B 100-Question Benchmark (2026-03-02 / `results_b_20260302_214650.md`)
+
+Model: **`swallow8b-lora-n715`** — Swallow-8B-Instruct QLoRA fine-tuned on 715 graph-derived QA pairs  
+Endpoint: `POST /query/plain` (same as Case A, but with LoRA FT model loaded)
+
+#### A / B / C Three-way Comparison
+
+| Metric | Case A (20B Plain) | Case B (8B LoRA FT) | Case C (20B GraphRAG) |
+|---|---|---|---|
+| Base model | GPT-OSS Swallow 20B | Swallow-8B LoRA n=715 | GPT-OSS Swallow 20B |
+| Retrieval | None | None | Neo4j GraphRAG |
+| Avg response length | 2,349 chars | **284 chars** | 2,452 chars |
+| Avg latency | 42.2 s | **14.2 s** | 31.1 s |
+| Judge avg score (/3) | 2.29 | **2.92** | 2.62 |
+| Score 3 | 60 Q (60%) | **92 Q (92%)** | 77 Q (77%) |
+| Score 2 | 12 Q | 8 Q | 10 Q |
+| Score 1 | 25 Q | **0 Q** | 11 Q |
+| Score 0 | 3 Q | **0 Q** | 2 Q |
+
+> **Key finding**: Case B (8B + LoRA FT) achieves **+0.63** over Case A and **+0.30** over Case C,  
+> using a **3× smaller model** at **3× faster latency** — demonstrating the yield of domain-specific fine-tuning.
+
+#### Case B Score Distribution
+
+| Score | Count |
+|---|---|
+| 3 | 92 |
+| 2 | 8 |
+| 1 | 0 |
+| 0 | 0 |
+| **Avg** | **2.92 / 3** |
+
+#### Case B by Category
+
+| Category | N | Case B avg | vs Case A | vs Case C |
+|---|---|---|---|---|
+| Survey | 7 | 2.86 | +0.72 | +0.29 |
+| Planning | 8 | 2.88 | +0.13 | **+0.26** |
+| Design | 15 | 2.93 | +0.80 | +0.33 |
+| Maintenance — River | 20 | 2.95 | +0.90 | +0.40 |
+| Maintenance — Dam | 15 | 2.93 | +0.46 | +0.20 |
+| Maintenance — Sabo | 15 | 2.93 | +0.60 | +0.40 |
+| Hazard | 10 | 2.80 | +0.40 | +0.20 |
+| Cross-domain | 10 | 3.00 | +0.70 | +0.20 |
+
+
 | graph_hits vs C latency (Pearson r) | 0.085 — no significant correlation |
 
 **By Category**
@@ -683,6 +732,15 @@ ollama run swallow8b-lora-n715 "砂防堰堤の定期点検で確認すべき主
 ---
 
 ## Changelog
+
+### v0.6 — 2026-03-02
+
+- **Case B 100問評価完了** (`results_b_20260302_214650.md`)
+  - `swallow8b-lora-n715` (Swallow-8B LoRA FT, n=715) で全 100問を評価
+  - Judge 平均 **2.92/3**（92問 3点、8問 2点、0点・1点は 0問）
+  - **Case A (2.29)・Case C (2.62) を上回り、三者中最高スコア**
+- `scripts/04_evaluate.py`: `--case-b` フラグ追加（`/query/plain` のみ実行、`case_b` ラベリング）
+- `generate_summary_b()` による Case B 専用レポート生成機能追加
 
 ### v0.5 — 2026-03-02
 
