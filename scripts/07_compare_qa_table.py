@@ -1,9 +1,17 @@
 """
 scripts/07_compare_qa_table.py
 A / B / C 代表10問 Q&A 定性比較表を Markdown 形式で出力する
+
+出力フォーマット（問ごとに 4行2列テーブル）:
+| 列1              | 列2                        |
+|------------------|----------------------------|
+| Question         | Question Prompt            |
+| Plain LLM        | Response A (Swallow-20B)   |
+| QLoRA Fine-Tune  | Response B (Swallow-8B FT) |
+| GraphRAG         | Response C (Swallow-20B)   |
 """
 import json
-import textwrap
+import re
 
 # ── 選定問題 ID（10問） ───────────────────────────────────────────────────
 SELECTED_IDS = [5, 14, 24, 26, 37, 52, 69, 82, 91, 95]
@@ -30,29 +38,27 @@ with open("data/eval/results/results_b_20260302_214650.jsonl", "r", encoding="ut
     recs_b = {json.loads(l)["id"]: json.loads(l) for l in f}
 
 # ── 出力ヘルパー ─────────────────────────────────────────────────────────
-def wrap(text: str, width: int = 120) -> str:
-    """Markdown セル内で読みやすいように適度に折り返す（改行は <br> に変換）"""
-    # 実際の改行 → <br> に統一
+def to_cell(text: str) -> str:
+    """回答テキストを Markdown テーブルセル用に変換する。
+    改行 → <br>、パイプ文字 → &#124; でエスケープ。"""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    # 過度な空白行を 1 行に
-    import re
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    text = text.replace("|", "&#124;")
+    text = text.replace("\n", "<br>")
     return text
 
 # ── Markdown 生成 ─────────────────────────────────────────────────────────
 lines = []
 lines.append("# A / B / C 代表 10問 Q&A 定性比較表\n")
-lines.append(f"> **対象ファイル**  ")
-lines.append(f"> - Case A / C : `data/eval/results/results_20260301_210818.jsonl`  ")
-lines.append(f"> - Case B     : `data/eval/results/results_b_20260302_214650.jsonl`  ")
-lines.append(f">  ")
-lines.append(f"> **Case 定義**  ")
-lines.append(f"> | Case | モデル | 構成 |")
-lines.append(f"> |---|---|---|")
-lines.append(f"> | A | Qwen2.5-14B (vanilla) | Raw LLM, GraphRAG なし |")
-lines.append(f"> | B | Swallow-8B LoRA FT n715 | LoRA FT + GraphRAG |")
-lines.append(f"> | C | Swallow-8B (vanilla) | Raw LLM, GraphRAG なし |")
-lines.append(f"")
+lines.append("> | Case | 構成 | モデル |")
+lines.append("> |---|---|---|")
+lines.append("> | **Plain LLM** (A) | Raw LLM, no RAG | GPT-OSS Swallow-20B-RL (Q4_K_M) |")
+lines.append("> | **QLoRA Fine-Tune** (B) | LoRA FT only | Swallow-8B-Instruct, n=715, Q4_K_M |")
+lines.append("> | **GraphRAG** (C) | GraphRAG + Raw LLM | GPT-OSS Swallow-20B-RL (Q4_K_M) |")
+lines.append(">")
+lines.append("> **Judge**: Qwen2.5-14B / Scoring rubric: 0–3  ")
+lines.append("> **Full answer texts**: see code blocks at bottom of each table.  ")
+lines.append("")
 
 for qid in SELECTED_IDS:
     rec_ac = recs_ac.get(qid)
@@ -61,10 +67,10 @@ for qid in SELECTED_IDS:
         print(f"WARNING: Q{qid} のデータが見つかりません")
         continue
 
-    q        = rec_ac["question"]
-    cat      = rec_ac["category"]
-    subcat   = rec_ac.get("subcategory", "")
-    note     = ID_NOTES.get(qid, "")
+    q      = rec_ac["question"]
+    cat    = rec_ac["category"]
+    subcat = rec_ac.get("subcategory", "")
+    note   = ID_NOTES.get(qid, "")
 
     ca = rec_ac["case_a"]
     cb = rec_b["case_b"]
@@ -78,60 +84,36 @@ for qid in SELECTED_IDS:
     rb = cb["judge"]["reason"]
     rc = cc["judge"]["reason"]
 
-    ans_a = wrap(ca["answer"])
-    ans_b = wrap(cb["answer"])
-    ans_c = wrap(cc["answer"])
+    ans_a = to_cell(ca["answer"])
+    ans_b = to_cell(cb["answer"])
+    ans_c = to_cell(cc["answer"])
 
-    # セクションヘッダ
+    # ── セクションヘッダ ─────────────────────────────────────────────────
     lines.append(f"---\n")
-    lines.append(f"## Q{qid}. {q}")
+    lines.append(f"### Q{qid}. {q}")
     lines.append(f"")
-    lines.append(f"**カテゴリ**: {cat} / {subcat}  ")
-    lines.append(f"**選定理由**: {note}  ")
-    lines.append(f"")
-
-    # スコアサマリ行
-    lines.append(f"| | Case A | Case B | Case C |")
-    lines.append(f"|---|---|---|---|")
-    lines.append(f"| **Judge Score** | **{sa}**/3 | **{sb}**/3 | **{sc}**/3 |")
-    lines.append(f"| **Elapsed (s)** | {ca['elapsed_s']:.1f} | {cb['elapsed_s']:.1f} | {cc['elapsed_s']:.1f} |")
-    lines.append(f"| **Length (ch.)** | {ca['length']} | {cb['length']} | {cc['length']} |")
+    lines.append(f"Category: **{cat}** / {subcat} &nbsp;｜&nbsp; {note}")
     lines.append(f"")
 
-    # --- Case A 回答
-    lines.append(f"### Case A 回答（Score {sa}/3）")
-    lines.append(f"")
-    lines.append(f"```")
-    lines.append(ans_a)
-    lines.append(f"```")
-    lines.append(f"")
-    lines.append(f"> **Judge 評価**: {ra}")
-    lines.append(f"")
-
-    # --- Case B 回答
-    lines.append(f"### Case B 回答（Score {sb}/3）")
-    lines.append(f"")
-    lines.append(f"```")
-    lines.append(ans_b)
-    lines.append(f"```")
-    lines.append(f"")
-    lines.append(f"> **Judge 評価**: {rb}")
+    # ── 4行 × 2列テーブル ────────────────────────────────────────────────
+    lines.append(f"| | Response |")
+    lines.append(f"|---|---|")
+    lines.append(f"| **Question** | {q} |")
+    lines.append(f"| **Plain LLM** (A)<br>*Swallow-20B*<br>Score **{sa}**/3 &nbsp; {ca['elapsed_s']:.1f}s | {ans_a} |")
+    lines.append(f"| **QLoRA Fine-Tune** (B)<br>*Swallow-8B FT*<br>Score **{sb}**/3 &nbsp; {cb['elapsed_s']:.1f}s | {ans_b} |")
+    lines.append(f"| **GraphRAG** (C)<br>*Swallow-20B*<br>Score **{sc}**/3 &nbsp; {cc['elapsed_s']:.1f}s | {ans_c} |")
     lines.append(f"")
 
-    # --- Case C 回答
-    lines.append(f"### Case C 回答（Score {sc}/3）")
-    lines.append(f"")
-    lines.append(f"```")
-    lines.append(ans_c)
-    lines.append(f"```")
-    lines.append(f"")
-    lines.append(f"> **Judge 評価**: {rc}")
+    # ── Judge 評価 ────────────────────────────────────────────────────────
+    lines.append(f"> **Judge A**: {ra}  ")
+    lines.append(f"> **Judge B**: {rb}  ")
+    lines.append(f"> **Judge C**: {rc}  ")
     lines.append(f"")
 
 # サマリテーブル
 lines.append("---\n")
 lines.append("## 選定 10問 スコアサマリ\n")
-lines.append("| Q# | カテゴリ | サブカテゴリ | Score A | Score B | Score C | B-A | パターン |")
+lines.append("| Q# | カテゴリ | サブカテゴリ | Plain LLM (A) | QLoRA FT (B) | GraphRAG (C) | B−A | パターン |")
 lines.append("|---|---|---|:---:|:---:|:---:|:---:|---|")
 for qid in SELECTED_IDS:
     rec_ac = recs_ac.get(qid)
