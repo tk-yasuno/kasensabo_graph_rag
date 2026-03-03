@@ -43,3 +43,7 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# arXiv paper drafts (local only — not published to GitHub)
+papers_graphDB_QLoRA/
+1_Methodology/
